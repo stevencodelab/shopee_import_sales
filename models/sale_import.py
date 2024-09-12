@@ -1,0 +1,257 @@
+from odoo import models, fields, api
+from odoo.exceptions import UserError, ValidationError
+from odoo.tools.translate import _
+import base64
+import csv
+import io
+import logging
+from datetime import datetime
+
+_logger = logging.getLogger(__name__)
+
+class SaleOrder(models.Model):
+    _inherit = 'sale.order'
+
+    # Fields tambahan pada sale.order
+    nomor_pesanan = fields.Char(string='No. Pesanan', store=True, copy=False, index=True)
+    order_status = fields.Selection([
+        ('Belum Bayar', 'Belum Bayar'),
+        ('Perlu Dikirim', 'Perlu Dikirim'),
+        ('Dikirim', 'Dikirim'),
+        ('Selesai', 'Selesai'),
+        ('Pembatalan', 'Pembatalan'),
+        ('Pengembalian', 'Pengembalian'),
+        ('Pengiriman Gagal', 'Pengiriman Gagal')
+    ], string='Status Pesanan')
+    cancellation_return_status = fields.Char(string='Status Pembatalan/Pengembalian')
+    tracking_number = fields.Char(string='No. Resi')
+    opsi_pengiriman = fields.Char(string='Opsi Pengiriman')
+    shipping_option = fields.Selection([
+        ('antar counter', 'Antar Ke Counter'),
+        ('pickup', 'Pick-up')
+    ], string='Antar ke counter/pick-up')
+    must_ship_before = fields.Datetime(string='Pesanan Harus Dikirimkan Sebelum')
+    order_creation_time = fields.Datetime(string='Waktu Pesanan Dibuat')
+    payment_time = fields.Datetime(string='Waktu Pembayaran Dilakukan')
+    payment_method = fields.Char(string='Metode Pembayaran')
+    seller_discount = fields.Float(string='Diskon Dari Penjual')
+    platform_discount = fields.Float(string='Diskon Dari Shopee')
+    voucher_seller = fields.Float(string='Voucher Ditanggung Penjual')
+    cashback = fields.Float(string='Cashback Koin')
+    voucher_platform = fields.Float(string='Voucher Ditanggung Shopee')
+    package_discount = fields.Float(string='Paket Diskon')
+    package_discount_platform = fields.Float(string='Paket Diskon (Diskon dari Shopee)')
+    package_discount_seller = fields.Float(string='Paket Diskon (Diskon dari Penjual)')
+    coin_discount = fields.Float(string='Potongan Koin Shopee')
+    credit_card_discount = fields.Float(string='Diskon Kartu Kredit')
+    shipping_fee_paid_by_buyer = fields.Float(string='Ongkos Kirim Dibayar oleh Pembeli') 
+    shipping_fee_discount = fields.Float(string='Estimasi Potongan Biaya Pengiriman')
+    return_shipping_fee = fields.Float(string='Ongkos Kirim Pengembalian Barang')
+    estimated_shipping_fee = fields.Float(string='Perkiraan Ongkos Kirim')
+    buyer_note = fields.Text(string='Catatan dari Pembeli')
+    buyer_username = fields.Char(string='Username (Pembeli)')
+    receiver_name = fields.Char(string='Nama Penerima')
+    receiver_phone = fields.Char(string='No. Telepon')
+    shipping_address = fields.Text(string='Alamat Pengiriman')
+    city = fields.Char(string='Kota/Kabupaten')
+    province = fields.Char(string='Provinsi')
+    order_completion_time = fields.Datetime(string='Waktu Pesanan Selesai')
+    
+    # Fields yang mungkin sudah ada di sale.order, tapi ditambahkan untuk kelengkapan
+    amount_total = fields.Float(string='Total Pembayaran', readonly=True, compute='_amount_all')
+
+    @api.depends('order_line.price_total', 'seller_discount', 'platform_discount', 'voucher_seller', 
+                 'cashback', 'voucher_platform', 'package_discount', 'coin_discount', 
+                 'credit_card_discount', 'shipping_fee_paid_by_buyer', 'shipping_fee_discount')
+    def _amount_all(self):
+        """
+        Compute the total amounts of the SO.
+        This method should be overridden to include all the new discounts and fees.
+        """
+        for order in self:
+            amount_untaxed = amount_tax = 0.0
+            for line in order.order_line:
+                amount_untaxed += line.price_subtotal
+                amount_tax += line.price_tax
+            order.update({
+                'amount_untaxed': amount_untaxed,
+                'amount_tax': amount_tax,
+                'amount_total': amount_untaxed + amount_tax - order.seller_discount - order.platform_discount - 
+                                order.voucher_seller - order.cashback - order.voucher_platform - 
+                                order.package_discount - order.coin_discount - order.credit_card_discount + 
+                                order.shipping_fee_paid_by_buyer - order.shipping_fee_discount
+            })
+    
+    @api.constrains('order_status')
+    def _check_order_status(self):
+        for order in self:
+            if order.order_status == 'Selesai' and not order.order_completion_time:
+                raise ValidationError(_("Waktu Pesanan Selesai harus diisi jika status pesanan adalah 'Selesai'."))
+
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
+    
+    parent_sku = fields.Char(string='Parent SKU')
+    sku_reference = fields.Char(string='SKU Reference')
+    variation_name = fields.Char(string='Variation Name')
+    original_price = fields.Float(string='Original Price')
+    discounted_price = fields.Float(string='Discounted Price')
+    returned_quantity = fields.Float(string='Returned Quantity')
+    product_weight = fields.Float(string='Product Weight')
+    total_weight = fields.Float(string='Total Weight')
+
+class SaleImportExport(models.Model):
+    _name = 'sale.import.export'
+    _description = 'Sale Import Export'
+
+    def import_sale_data(self, csv_data):
+        successful_imports = 0
+        total_rows = 0
+        error_rows = []
+
+        # Decode CSV data if necessary
+        if isinstance(csv_data, str):
+            csv_file = io.StringIO(csv_data)
+        elif isinstance(csv_data, bytes):
+            csv_file = io.StringIO(csv_data.decode('utf-8'))
+        else:
+            csv_file = csv_data
+        
+        reader = csv.DictReader(csv_file)
+        
+        for row in reader:
+            total_rows += 1
+            try:
+                self._process_sale_row(row)
+                successful_imports += 1
+            except Exception as e:
+                error_rows.append((total_rows, str(e)))
+                _logger.error(f"Error processing row {total_rows}: {str(e)}")
+        
+        return successful_imports, total_rows, error_rows
+
+
+    def _process_sale_row(self, row):
+        # Cari pesanan berdasarkan nomor pesanan
+        order = self.env['sale.order'].search([('name', '=', row.get('No. Pesanan'))], limit=1)
+        if not order:
+            partner = self._get_or_create_partner(row)
+            order_vals = {
+                'name': row.get('No. Pesanan'),
+                'partner_id': partner.id,
+                'order_status': row.get('Status Pesanan'),
+                'cancellation_return_status': row.get('Status Pembatalan/ Pengembalian'),
+                'tracking_number': row.get('No. Resi'),
+                'opsi_pengiriman': row.get('Opsi Pengiriman'),
+                'shipping_option': 'antar counter' if row.get('Antar ke counter/pick-up') == 'Antar Ke Counter' else 'pickup',
+                'must_ship_before': self._parse_datetime(row.get('Pesanan Harus Dikirimkan Sebelum')),
+                'order_creation_time': self._parse_datetime(row.get('Waktu Pesanan Dibuat')),
+                'payment_time': self._parse_datetime(row.get('Waktu Pembayaran Dilakukan')),
+                'payment_method': row.get('Metode Pembayaran'),
+                'seller_discount': self._parse_float(row.get('Diskon Dari Penjual', 0.0)),
+                'platform_discount': self._parse_float(row.get('Diskon Dari Shopee', 0.0)),
+                'voucher_seller': self._parse_float(row.get('Voucher Ditanggung Penjual', 0.0)),
+                'cashback': self._parse_float(row.get('Cashback Koin', 0.0)),
+                'voucher_platform': self._parse_float(row.get('Voucher Ditanggung Shopee', 0.0)),
+                'package_discount': self._parse_float(row.get('Paket Diskon', 0.0)),
+                'package_discount_platform': self._parse_float(row.get('Paket Diskon (Diskon dari Shopee)', 0.0)),
+                'package_discount_seller': self._parse_float(row.get('Paket Diskon (Diskon dari Penjual)', 0.0)),
+                'coin_discount': self._parse_float(row.get('Potongan Koin Shopee', 0.0)),
+                'credit_card_discount': self._parse_float(row.get('Diskon Kartu Kredit', 0.0)),
+                'shipping_fee_paid_by_buyer': self._parse_float(row.get('Ongkos Kirim Dibayar oleh Pembeli', 0.0)),
+                'shipping_fee_discount': self._parse_float(row.get('Estimasi Potongan Biaya Pengiriman', 0.0)),
+                'return_shipping_fee': self._parse_float(row.get('Ongkos Kirim Pengembalian Barang', 0.0)),
+                'estimated_shipping_fee': self._parse_float(row.get('Perkiraan Ongkos Kirim', 0.0)),
+                'buyer_note': row.get('Catatan dari Pembeli'),
+                'buyer_username': row.get('Username (Pembeli)'),
+                'receiver_name': row.get('Nama Penerima'),
+                'receiver_phone': row.get('No. Telepon'),
+                'shipping_address': row.get('Alamat Pengiriman'),
+                'city': row.get('Kota/Kabupaten'),
+                'province': row.get('Provinsi'),
+                'order_completion_time': self._parse_datetime(row.get('Waktu Pesanan Selesai')),
+            }
+            order = self.env['sale.order'].create(order_vals)
+
+        # Tambahkan data produk
+        self._process_order_lines(order, row)
+    
+    def _process_order_lines(self, order, row):
+        """
+        Memproses detail produk per baris pesanan
+        """
+        product = self._get_or_create_product(row)
+        line_vals = {
+            'order_id': order.id,
+            'product_id': product.id,
+            'parent_sku': row.get('SKU Induk'),
+            'sku_reference': row.get('Nomor Referensi SKU'),
+            'variation_name': row.get('Nama Variasi'),
+            'original_price': self._parse_float(row.get('Harga Awal')),
+            'discounted_price': self._parse_float(row.get('Harga Setelah Diskon')),
+            'returned_quantity': self._parse_float(row.get('Returned Quantity', 0.0)),
+            'product_uom_qty': self._parse_float(row.get('Jumlah')),
+            'product_weight': self._parse_float(row.get('Berat Produk')),
+            'total_weight': self._parse_float(row.get('Total Berat')),
+        }
+        self.env['sale.order.line'].create(line_vals)
+
+    def _get_or_create_partner(self, row):
+        """
+        Mendapatkan atau membuat mitra berdasarkan nama pembeli
+        """
+        partner = self.env['res.partner'].search([('name', '=', row.get('Username (Pembeli)'))], limit=1)
+        if not partner:
+            partner = self.env['res.partner'].create({
+                'name': row.get('Username (Pembeli)'),
+                'phone': row.get('No. Telepon'),
+                'street': row.get('Alamat Pengiriman'),
+                'city': row.get('Kota/Kabupaten'),
+                'state_id': self._get_state_id(row.get('Provinsi')),
+            })
+        return partner
+
+    def _get_state_id(self, state_name):
+        """
+        Mendapatkan ID provinsi berdasarkan nama
+        """
+        state = self.env['res.country.state'].search([('name', '=', state_name)], limit=1)
+        if state:
+            return state.id
+        return False
+
+    def _get_or_create_product(self, row):
+        """
+        Mendapatkan atau membuat produk berdasarkan SKU
+        """
+        product = self.env['product.product'].search([('default_code', '=', row.get('Nomor Referensi SKU'))], limit=1)
+        if not product:
+            product = self.env['product.product'].create({
+                'name': row.get('Nama Produk'),
+                'default_code': row.get('Nomor Referensi SKU'),
+                'list_price': self._parse_float(row.get('Harga Awal')),
+                'weight': self._parse_float(row.get('Berat Produk')),
+            })
+        return product
+
+    def _parse_datetime(self, date_string):
+        """
+        Memparse tanggal dari format string ke datetime
+        """
+        date_formats = ['%d-%m-%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%d-%m-%Y', '%Y-%m-%d']
+        for fmt in date_formats:
+            try:
+                return datetime.strptime(date_string, fmt)
+            except (ValueError, TypeError):
+                continue
+        _logger.error(f"Unable to parse date: {date_string}")
+        return False
+
+    def _parse_float(self, value):
+        """
+        Memparse nilai ke float, menghandle kasus nilai kosong
+        """
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return 0.0

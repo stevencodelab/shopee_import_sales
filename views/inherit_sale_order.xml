@@ -1,0 +1,68 @@
+<odoo>
+    <data>
+        <record id="view_order_tree_custom" model="ir.ui.view">
+            <field name="name">sale.order.tree.custom</field>
+            <field name="model">sale.order</field>
+            <field name="arch" type="xml">
+                <tree string="Sales Orders - Shopee" decoration-bf="message_needaction==True" decoration-muted="state=='cancel'">
+                    <field name="name"/>
+                    <field name="nomor_pesanan"/>
+                    <field name="order_status"/>
+                    <field name="cancellation_return_status"/>
+                    <field name="tracking_number"/>
+                    <field name="opsi_pengiriman"/>
+                    <field name="shipping_option"/>
+                    <field name="must_ship_before"/>
+                    <field name="order_creation_time"/>
+                    <field name="payment_time"/>
+                    <field name="payment_method"/>
+                    <field name="seller_discount"/>
+                    <field name="platform_discount"/>
+                    <field name="voucher_seller"/>
+                    <field name="cashback"/>
+                    <field name="voucher_platform"/>
+                    <field name="package_discount"/>
+                    <field name="package_discount_platform"/>
+                    <field name="package_discount_seller"/>
+                    <field name="coin_discount"/>
+                    <field name="credit_card_discount"/>
+                    <field name="shipping_fee_paid_by_buyer"/>
+                    <field name="shipping_fee_discount"/>
+                    <field name="return_shipping_fee"/>
+                    <field name="estimated_shipping_fee"/>
+                    <field name="buyer_note"/>
+                    <field name="buyer_username"/>
+                    <field name="receiver_name"/>
+                    <field name="receiver_phone"/>
+                    <field name="shipping_address"/>
+                    <field name="city"/>
+                    <field name="province"/>
+                    <field name="order_completion_time"/>
+                    <field name="message_needaction" invisible="1"/>
+                    <field name="state" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="action_orders_custom" model="ir.actions.act_window">
+            <field name="name">Sales Orders - Shopee</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">sale.order</field>
+            <field name="view_mode">tree,form,calendar,graph,pivot,kanban</field>
+            <field name="view_id" ref="view_order_tree_custom"/>
+            <field name="search_view_id" ref="sale.sale_order_view_search_inherit_sale"/>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create a new quotation, the first step of a new sale!
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_sale_order_custom"
+            name="Shopee Orders "
+            action="action_orders_custom"
+            parent="sale.sale_order_menu"
+            sequence="2"/>
+    </data>
+</odoo>
