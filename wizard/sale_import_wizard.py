@@ -71,11 +71,15 @@ class SaleImportWizard(models.TransientModel):
 
     def _parse_float(self, value):
         """
-        Parse value to float, handling empty cases
+        Parse value to float, handling empty cases and preserving precision
         """
+        if not value:
+            return 0.0
         try:
-            return float(value)
-        except (ValueError, TypeError):
+            # Remove thousand separators and replace comma with dot for decimal
+            cleaned_value = value.replace(',', '').replace('.', '').replace(',', '.')
+            return float(cleaned_value)
+        except ValueError:
             return 0.0
 
     def _get_or_create_partner(self, row):
@@ -183,7 +187,7 @@ class SaleImportWizard(models.TransientModel):
             'variation_name': row.get('Nama Variasi'),
             'original_price': self._parse_float(row.get('Harga Awal')),
             'discounted_price': self._parse_float(row.get('Harga Setelah Diskon')),
-            'returned_quantity': self._parse_float(row.get('Returned Quantity', 0.0)),
+            'returned_quantity': self._parse_float(row.get('Returned Quantity', '0')),
             'product_uom_qty': self._parse_float(row.get('Jumlah')),
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
@@ -191,7 +195,7 @@ class SaleImportWizard(models.TransientModel):
         order.order_line = [(0, 0, line_vals)]
 
         return order
-
+        
     def import_sales(self):
         """
         Import sales from the uploaded CSV file.

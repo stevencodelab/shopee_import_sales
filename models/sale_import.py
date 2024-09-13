@@ -94,11 +94,11 @@ class SaleOrderLine(models.Model):
     parent_sku = fields.Char(string='Parent SKU')
     sku_reference = fields.Char(string='SKU Reference')
     variation_name = fields.Char(string='Variation Name')
-    original_price = fields.Float(string='Original Price')
-    discounted_price = fields.Float(string='Discounted Price')
-    returned_quantity = fields.Float(string='Returned Quantity')
-    product_weight = fields.Float(string='Product Weight')
-    total_weight = fields.Float(string='Total Weight')
+    original_price = fields.Float(string='Original Price', digits=(16, 6))
+    discounted_price = fields.Float(string='Discounted Price', digits=(16, 6))
+    returned_quantity = fields.Float(string='Returned Quantity', digits=(16, 6))
+    product_weight = fields.Float(string='Product Weight', digits=(16, 6))
+    total_weight = fields.Float(string='Total Weight', digits=(16, 6))
 
 class SaleImportExport(models.Model):
     _name = 'sale.import.export'
@@ -148,20 +148,20 @@ class SaleImportExport(models.Model):
                 'order_creation_time': self._parse_datetime(row.get('Waktu Pesanan Dibuat')),
                 'payment_time': self._parse_datetime(row.get('Waktu Pembayaran Dilakukan')),
                 'payment_method': row.get('Metode Pembayaran'),
-                'seller_discount': self._parse_float(row.get('Diskon Dari Penjual', 0.0)),
-                'platform_discount': self._parse_float(row.get('Diskon Dari Shopee', 0.0)),
-                'voucher_seller': self._parse_float(row.get('Voucher Ditanggung Penjual', 0.0)),
-                'cashback': self._parse_float(row.get('Cashback Koin', 0.0)),
-                'voucher_platform': self._parse_float(row.get('Voucher Ditanggung Shopee', 0.0)),
-                'package_discount': self._parse_float(row.get('Paket Diskon', 0.0)),
-                'package_discount_platform': self._parse_float(row.get('Paket Diskon (Diskon dari Shopee)', 0.0)),
-                'package_discount_seller': self._parse_float(row.get('Paket Diskon (Diskon dari Penjual)', 0.0)),
-                'coin_discount': self._parse_float(row.get('Potongan Koin Shopee', 0.0)),
-                'credit_card_discount': self._parse_float(row.get('Diskon Kartu Kredit', 0.0)),
-                'shipping_fee_paid_by_buyer': self._parse_float(row.get('Ongkos Kirim Dibayar oleh Pembeli', 0.0)),
-                'shipping_fee_discount': self._parse_float(row.get('Estimasi Potongan Biaya Pengiriman', 0.0)),
-                'return_shipping_fee': self._parse_float(row.get('Ongkos Kirim Pengembalian Barang', 0.0)),
-                'estimated_shipping_fee': self._parse_float(row.get('Perkiraan Ongkos Kirim', 0.0)),
+                'seller_discount': self._parse_float(row.get('Diskon Dari Penjual', digits=(16, 6))),
+                'platform_discount': self._parse_float(row.get('Diskon Dari Shopee', digits=(16, 6))),
+                'voucher_seller': self._parse_float(row.get('Voucher Ditanggung Penjual', digits=(16, 6))),
+                'cashback': self._parse_float(row.get('Cashback Koin', digits=(16, 6))),
+                'voucher_platform': self._parse_float(row.get('Voucher Ditanggung Shopee', digits=(16, 6))),
+                'package_discount': self._parse_float(row.get('Paket Diskon', digits=(16, 6))),
+                'package_discount_platform': self._parse_float(row.get('Paket Diskon (Diskon dari Shopee)', digits=(16, 6))),
+                'package_discount_seller': self._parse_float(row.get('Paket Diskon (Diskon dari Penjual)', digits=(16, 6))),
+                'coin_discount': self._parse_float(row.get('Potongan Koin Shopee', digits=(16, 6))),
+                'credit_card_discount': self._parse_float(row.get('Diskon Kartu Kredit', digits=(16, 6))),
+                'shipping_fee_paid_by_buyer': self._parse_float(row.get('Ongkos Kirim Dibayar oleh Pembeli', digits=(16, 6))),
+                'shipping_fee_discount': self._parse_float(row.get('Estimasi Potongan Biaya Pengiriman', digits=(16, 6))),
+                'return_shipping_fee': self._parse_float(row.get('Ongkos Kirim Pengembalian Barang', digits=(16, 6))),
+                'estimated_shipping_fee': self._parse_float(row.get('Perkiraan Ongkos Kirim', digits=(16, 6))),
                 'buyer_note': row.get('Catatan dari Pembeli'),
                 'buyer_username': row.get('Username (Pembeli)'),
                 'receiver_name': row.get('Nama Penerima'),
@@ -234,24 +234,15 @@ class SaleImportExport(models.Model):
             })
         return product
 
-    def _parse_datetime(self, date_string):
-        """
-        Memparse tanggal dari format string ke datetime
-        """
-        date_formats = ['%d-%m-%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%d-%m-%Y', '%Y-%m-%d']
-        for fmt in date_formats:
-            try:
-                return datetime.strptime(date_string, fmt)
-            except (ValueError, TypeError):
-                continue
-        _logger.error(f"Unable to parse date: {date_string}")
-        return False
-
     def _parse_float(self, value):
         """
-        Memparse nilai ke float, menghandle kasus nilai kosong
+        Parse value to float, handling empty cases and preserving precision
         """
+        if not value:
+            return 0.0
         try:
-            return float(value)
-        except (ValueError, TypeError):
+            # Remove thousand separators and replace comma with dot for decimal
+            cleaned_value = value.replace(',', '').replace('.', '').replace(',', '.')
+            return float(cleaned_value)
+        except ValueError:
             return 0.0
