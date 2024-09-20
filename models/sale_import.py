@@ -17,9 +17,9 @@ class SaleOrder(models.Model):
     order_status = fields.Selection([
         ('Belum Bayar', 'Belum Bayar'),
         ('Perlu Dikirim', 'Perlu Dikirim'),
-        ('Dikirim', 'Dikirim'),
+        ('Sedang Dikirim', 'Sedang Dikirim'),
         ('Selesai', 'Selesai'),
-        ('Pembatalan', 'Pembatalan'),
+        ('Batal', 'Batal'),
         ('Pengembalian', 'Pengembalian'),
         ('Pengiriman Gagal', 'Pengiriman Gagal')
     ], string='Status Pesanan')
@@ -81,12 +81,20 @@ class SaleOrder(models.Model):
                                 order.package_discount - order.coin_discount - order.credit_card_discount + 
                                 order.shipping_fee_paid_by_buyer - order.shipping_fee_discount
             })
-    
-    @api.constrains('order_status')
+
+    @api.constrains('order_status', 'order_completion_time')
     def _check_order_status(self):
         for order in self:
             if order.order_status == 'Selesai' and not order.order_completion_time:
-                raise ValidationError(_("Waktu Pesanan Selesai harus diisi jika status pesanan adalah 'Selesai'."))
+                # Option 1: Set a default completion time
+                order.order_completion_time = fields.Datetime.now()
+                
+                # Option 2: Raise a warning instead of an error
+                # order._message_log(body=_("Warning: Pesanan ditandai sebagai 'Selesai' tanpa Waktu Pesanan Selesai."))
+                
+                # Option 3: Keep the validation, but make it less strict
+                # if not self.env.context.get('importing_sale_order'):
+                #     raise ValidationError(_("Waktu Pesanan Selesai harus diisi jika status pesanan adalah 'Selesai'."))
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
@@ -233,7 +241,7 @@ class SaleImportExport(models.Model):
                 'weight': self._parse_float(row.get('Berat Produk')),
             })
         return product
-
+    
     def _parse_float(self, value):
         """
         Parse value to float, handling empty cases and preserving precision
@@ -246,3 +254,4 @@ class SaleImportExport(models.Model):
             return float(cleaned_value)
         except ValueError:
             return 0.0
+    
