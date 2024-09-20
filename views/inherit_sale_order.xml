@@ -59,6 +59,27 @@
             </field>
         </record>
 
+  
+        <record id="view_order_form_inherit_shopee" model="ir.ui.view">
+            <field name="name">sale.order.form.inherit.shopee</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_id']" position="before">
+                    <field name="nomor_pesanan"/>
+                    <field name="order_creation_time"/>
+                    <field name="order_status"/>
+                </xpath>
+                <xpath expr="//field[@name='payment_term_id']" position="after">
+                    <field name="opsi_pengiriman"/>
+                    <field name="shipping_option"/>
+                    <field name="must_ship_before"/>
+                    <field name="payment_method"/>
+                    <field name="payment_time"/>
+                </xpath>
+            </field>
+        </record>
+
         <menuitem id="menu_sale_order_custom"
             name="Shopee Orders "
             action="action_orders_custom"
