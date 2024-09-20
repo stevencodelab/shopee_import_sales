@@ -22,13 +22,16 @@ class SaleImportWizard(models.TransientModel):
     filename = fields.Char(string='Filename')
 
     def _parse_file(self):
-        """
-        Parse the CSV file and return a list of dictionaries.
-        """
         data = base64.b64decode(self.file_data)
-        file_input = io.StringIO(data.decode("utf-8"))
-        reader = csv.DictReader(file_input, delimiter=',')
-        return list(reader)
+        encodings = ['utf-8', 'iso-8859-1', 'windows-1252']
+        for encoding in encodings:
+            try:
+                file_input = io.StringIO(data.decode(encoding))
+                reader = csv.DictReader(file_input, delimiter=',')
+                return list(reader)
+            except UnicodeDecodeError:
+                continue
+        raise UserError(_("Unable to decode the file. Please check the file encoding."))
 
     def _parse_datetime(self, date_string):
         """
@@ -66,7 +69,7 @@ class SaleImportWizard(models.TransientModel):
         except ValueError:
             pass
         
-        logger.warning(f"Unable to parse date: {date_string}")
+        _logger.warning(f"Unable to parse date: {date_string}")
         return False
 
     def _parse_float(self, value):
