@@ -56,32 +56,30 @@ class SaleOrder(models.Model):
     city = fields.Char(string='Kota/Kabupaten')
     province = fields.Char(string='Provinsi')
     order_completion_time = fields.Datetime(string='Waktu Pesanan Selesai')
-    
+    amount_untaxed_before_tax = fields.Float(string='Untaxed Amount Before Tax', compute='_amount_all', store=True)
+    amount_untaxed = fields.Float(string='Untaxed Amount', compute='_amount_all', store=True)
+    amount_tax = fields.Float(string='Taxes', compute='_amount_all', store=True)
     # Fields yang mungkin sudah ada di sale.order, tapi ditambahkan untuk kelengkapan
-    amount_total = fields.Float(string='Total Pembayaran', readonly=True, compute='_amount_all')
+    amount_total = fields.Float(string='Estimasi Total Penghasilan', readonly=True, compute='_amount_all')
 
-    @api.depends('order_line.price_total', 'seller_discount', 'platform_discount', 'voucher_seller', 
-                 'cashback', 'voucher_platform', 'package_discount', 'coin_discount', 
-                 'credit_card_discount', 'shipping_fee_paid_by_buyer', 'shipping_fee_discount')
+    @api.depends('order_line.price_total', 'order_line.price_subtotal')
     def _amount_all(self):
-        """
-        Compute the total amounts of the SO.
-        This method should be overridden to include all the new discounts and fees.
-        """
         for order in self:
-            amount_untaxed = amount_tax = 0.0
-            for line in order.order_line:
-                amount_untaxed += line.price_subtotal
-                amount_tax += line.price_tax
+            amount_untaxed_before_tax = sum(line.price_subtotal for line in order.order_line)
+            
+            # Menghitung amount_untaxed dengan membagi amount_untaxed_before_tax dengan 1.11 (100% + 11%)
+            amount_untaxed = amount_untaxed_before_tax / 1.11
+            
+            # Menghitung pajak
+            amount_tax = amount_untaxed_before_tax - amount_untaxed
+            
             order.update({
+                'amount_untaxed_before_tax': amount_untaxed_before_tax,
                 'amount_untaxed': amount_untaxed,
                 'amount_tax': amount_tax,
-                'amount_total': amount_untaxed + amount_tax - order.seller_discount - order.platform_discount - 
-                                order.voucher_seller - order.cashback - order.voucher_platform - 
-                                order.package_discount - order.coin_discount - order.credit_card_discount + 
-                                order.shipping_fee_paid_by_buyer - order.shipping_fee_discount
+                'amount_total': amount_untaxed_before_tax,  # Total tetap sama dengan jumlah sebelum pajak
             })
-
+            
     @api.constrains('order_status', 'order_completion_time')
     def _check_order_status(self):
         for order in self:
@@ -107,6 +105,8 @@ class SaleOrderLine(models.Model):
     returned_quantity = fields.Float(string='Returned Quantity', digits=(16, 6))
     product_weight = fields.Float(string='Product Weight', digits=(16, 6))
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
+    biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
+    biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
 
 class SaleImportExport(models.Model):
     _name = 'sale.import.export'
