@@ -59,27 +59,30 @@ class SaleOrder(models.Model):
     amount_untaxed_before_tax = fields.Float(string='Untaxed Amount Before Tax', compute='_amount_all', store=True)
     amount_untaxed = fields.Float(string='Untaxed Amount', compute='_amount_all', store=True)
     amount_tax = fields.Float(string='Taxes', compute='_amount_all', store=True)
+    
     # Fields yang mungkin sudah ada di sale.order, tapi ditambahkan untuk kelengkapan
     amount_total = fields.Float(string='Estimasi Total Penghasilan', readonly=True, compute='_amount_all')
 
-    @api.depends('order_line.price_total', 'order_line.price_subtotal')
+    @api.depends('order_line.price_total', 'order_line.price_total')
     def _amount_all(self):
         for order in self:
-            amount_untaxed_before_tax = sum(line.price_subtotal for line in order.order_line)
+            amount_untaxed_before_tax = sum(line.price_total for line in order.order_line)
             
-            # Menghitung amount_untaxed dengan membagi amount_untaxed_before_tax dengan 1.11 (100% + 11%)
+            # Menghitung amount_untaxed tanpa pajak
             amount_untaxed = amount_untaxed_before_tax / 1.11
             
             # Menghitung pajak
             amount_tax = amount_untaxed_before_tax - amount_untaxed
             
+            # Update nilai yang benar
             order.update({
                 'amount_untaxed_before_tax': amount_untaxed_before_tax,
                 'amount_untaxed': amount_untaxed,
                 'amount_tax': amount_tax,
-                'amount_total': amount_untaxed_before_tax,  # Total tetap sama dengan jumlah sebelum pajak
+                'amount_total': amount_untaxed_before_tax,
             })
-            
+
+    
     @api.constrains('order_status', 'order_completion_time')
     def _check_order_status(self):
         for order in self:
@@ -107,7 +110,20 @@ class SaleOrderLine(models.Model):
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
     biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
     biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
+    total = fields.Monetary(string='Sub Total', compute='_compute_amount', store=True)
 
+    @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
+    def _compute_amount(self):
+        for line in self:
+            # Menghitung diskon
+            price_after_discount = line.price_unit - (line.price_unit * (line.discount / 100.0))
+            
+            # Membagi hasil setelah diskon dengan 1.11 untuk pengecualian pajak
+            line.total = (price_after_discount * line.product_uom_qty) / 1.11
+
+
+
+    
 class SaleImportExport(models.Model):
     _name = 'sale.import.export'
     _description = 'Sale Import Export'
