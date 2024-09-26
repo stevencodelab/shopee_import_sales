@@ -35,39 +35,26 @@ class SaleImportWizard(models.TransientModel):
 
     def _parse_datetime(self, date_string):
         """
-        Parse date from string format to naive datetime
+        Parse date from string format to datetime
         """
         if not date_string:
             return False
         
         date_formats = [
-            '%d-%m-%Y %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S',
-            '%d-%m-%Y %H:%M',
-            '%Y-%m-%d %H:%M',
-            '%d-%m-%Y',
-            '%Y-%m-%d',
-            '%d/%m/%Y %H:%M:%S',
-            '%Y/%m/%d %H:%M:%S',
+            '%m/%d/%Y %H:%M',  # Format in your CSV: 9/21/2024 8:39
+            '%m/%d/%Y',
             '%d/%m/%Y %H:%M',
-            '%Y/%m/%d %H:%M',
             '%d/%m/%Y',
-            '%Y/%m/%d',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M',
+            '%Y-%m-%d',
         ]
         
         for fmt in date_formats:
             try:
-                dt = datetime.strptime(date_string, fmt)
-                return dt  # Return naive datetime
+                return datetime.strptime(date_string.strip(), fmt)
             except ValueError:
                 continue
-        
-        # Handle ISO 8601 format with timezone
-        try:
-            dt = datetime.fromisoformat(date_string)
-            return dt.replace(tzinfo=None)  # Strip timezone info
-        except ValueError:
-            pass
         
         _logger.warning(f"Unable to parse date: {date_string}")
         return False
@@ -146,14 +133,12 @@ class SaleImportWizard(models.TransientModel):
             'cancellation_return_status': row.get('Status Pembatalan/ Pengembalian'),
             'tracking_number': row.get('No. Resi'),
             'opsi_pengiriman': row.get('Opsi Pengiriman'),
-            'shipping_option': 'antar counter' if row.get('Antar ke counter/pick-up') == 'Antar Ke Counter' else 'pickup',
-            'must_ship_before': self._parse_datetime(row.get('Pesanan Harus Dikirimkan Sebelum')),
+            'shipping_option': 'antar counter' if row.get('Antar ke counter/ pick-up') == 'Antar Ke Counter' else 'pickup',
+            'must_ship_before': self._parse_datetime(row.get('Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)')),
             'order_creation_time': self._parse_datetime(row.get('Waktu Pesanan Dibuat')),
             'payment_time': self._parse_datetime(row.get('Waktu Pembayaran Dilakukan')),
             'payment_method': row.get('Metode Pembayaran'),
-            'seller_discount': self._parse_float(row.get('Diskon Dari Penjual')),
             'platform_discount': self._parse_float(row.get('Diskon Dari Shopee')),
-            'voucher_seller': self._parse_float(row.get('Voucher Ditanggung Penjual')),
             'cashback': self._parse_float(row.get('Cashback Koin')),
             'voucher_platform': self._parse_float(row.get('Voucher Ditanggung Shopee')),
             'package_discount': self._parse_float(row.get('Paket Diskon')),
@@ -190,10 +175,12 @@ class SaleImportWizard(models.TransientModel):
             'variation_name': row.get('Nama Variasi'),
             'original_price': self._parse_float(row.get('Harga Awal')),
             'discounted_price': self._parse_float(row.get('Harga Setelah Diskon')),
-            'returned_quantity': self._parse_float(row.get('Returned Quantity', '0')),
+            'returned_quantity': self._parse_float(row.get('Returned quantity', '0')),
             'product_uom_qty': self._parse_float(row.get('Jumlah')),
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
+            'voucher_seller': self._parse_float(row.get('Voucher Ditanggung Penjual')),
+            'seller_discount': self._parse_float(row.get('Diskon Dari Penjual')),
         }
         order.order_line = [(0, 0, line_vals)]
 
@@ -210,7 +197,7 @@ class SaleImportWizard(models.TransientModel):
         rows = self._parse_file()
         created_orders = self.env['sale.order']
         errors = []
-
+    
         for index, row in enumerate(rows, start=1):
             try:
                 order = self._create_sale_order(row)
