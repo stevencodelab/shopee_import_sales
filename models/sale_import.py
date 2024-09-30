@@ -63,24 +63,28 @@ class SaleOrder(models.Model):
     # Fields yang mungkin sudah ada di sale.order, tapi ditambahkan untuk kelengkapan
     amount_total = fields.Float(string='Estimasi Total Penghasilan', readonly=True, compute='_amount_all')
 
-    @api.depends('order_line.price_total', 'order_line.price_total')
+    @api.depends('order_line.price_total')
     def _amount_all(self):
         for order in self:
-            amount_untaxed_before_tax = sum(line.price_total for line in order.order_line)
+            res = super(SaleOrder, self)._amount_all()
+        
+        #     amount_untaxed_before_tax = sum(line.price_total for line in order.order_line)
             
-            # Menghitung amount_untaxed tanpa pajak
-            amount_untaxed = amount_untaxed_before_tax / 1.11
+        #     # Menghitung amount_untaxed tanpa pajak
+        #     amount_untaxed = amount_untaxed_before_tax / 1.11
             
-            # Menghitung pajak
-            amount_tax = amount_untaxed_before_tax - amount_untaxed
+        #     # Menghitung pajak
+        #     amount_tax = amount_untaxed_before_tax - amount_untaxed
             
-            # Update nilai yang benar
-            order.update({
-                'amount_untaxed_before_tax': amount_untaxed_before_tax,
-                'amount_untaxed': amount_untaxed,
-                'amount_tax': amount_tax,
-                'amount_total': amount_untaxed_before_tax,
-            })
+        #     # Update nilai yang benar
+        #     order.update({
+        #         'amount_untaxed_before_tax': amount_untaxed_before_tax,
+        #         'amount_untaxed': amount_untaxed,
+        #         'amount_tax': amount_tax,
+        #         'amount_total': amount_untaxed_before_tax,
+        #     })
+
+        return res
 
     
     @api.constrains('order_status', 'order_completion_time')
@@ -115,11 +119,12 @@ class SaleOrderLine(models.Model):
     @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
     def _compute_amount(self):
         for line in self:
-            # Menghitung diskon
-            price_after_discount = line.price_unit - (line.price_unit * (line.discount / 100.0))
+            res = super(SaleOrderLine, self)._compute_amount()
+            # # Menghitung diskon
+            # price_after_discount = line.price_unit - (line.price_unit * (line.discount / 100.0))
             
-            # Membagi hasil setelah diskon dengan 1.11 untuk pengecualian pajak
-            line.total = (price_after_discount * line.product_uom_qty) / 1.11
+            # # Membagi hasil setelah diskon dengan 1.11 untuk pengecualian pajak
+            # line.total = (price_after_discount * line.product_uom_qty) / 1.11
 
 
 
