@@ -74,30 +74,7 @@
                     <field name="payment_time"/>
                     <field name="payment_method"/>
                 </field>
-                <field name="amount_total" position="before">
-                    <field name="seller_discount"/>
-                    <field name="platform_discount"/>
-                    <field name="voucher_seller"/>
-                    <field name="cashback"/>
-                    <field name="voucher_platform"/>
-                    <field name="package_discount"/>
-                    <field name="package_discount_platform"/>
-                    <field name="package_discount_seller"/>
-                    <field name="coin_discount"/>
-                    <field name="credit_card_discount"/>
-                    <field name="shipping_fee_paid_by_buyer"/>
-                    <field name="shipping_fee_discount"/>
-                    <field name="return_shipping_fee"/>
-                    <field name="estimated_shipping_fee"/>
-                </field>
                 <field name="amount_total" position="after">
-                    <field name="buyer_note"/>
-                    <field name="buyer_username"/>
-                    <field name="receiver_name"/>
-                    <field name="receiver_phone"/>
-                    <field name="shipping_address"/>
-                    <field name="city"/>
-                    <field name="province"/>
                     <field name="order_completion_time"/>
                 </field>
             </tree>

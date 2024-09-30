@@ -16,27 +16,6 @@
                     <field name="order_creation_time"/>
                     <field name="payment_time"/>
                     <field name="payment_method"/>
-                    <field name="seller_discount" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="platform_discount" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="voucher_seller" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="cashback" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="voucher_platform" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="package_discount" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="package_discount_platform" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="package_discount_seller" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="coin_discount" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="credit_card_discount" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="shipping_fee_paid_by_buyer" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="shipping_fee_discount" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="return_shipping_fee" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="estimated_shipping_fee" widget="monetary" options="{'currency_field': 'currency_id'}" digits="[16, 6]"/>
-                    <field name="buyer_note"/>
-                    <field name="buyer_username"/>
-                    <field name="receiver_name"/>
-                    <field name="receiver_phone"/>
-                    <field name="shipping_address"/>
-                    <field name="city"/>
-                    <field name="province"/>
                     <field name="order_completion_time"/>
                     <field name="message_needaction" invisible="1"/>
                     <field name="state" invisible="1"/>
