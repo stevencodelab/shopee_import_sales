@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 
 try:
     import pytz
+
 except ImportError:
     pytz = None
     _logger.warning("pytz library is not installed. Timezone conversion may not be accurate.")
@@ -49,13 +50,13 @@ class SaleImportWizard(models.TransientModel):
             '%Y-%m-%d %H:%M',
             '%Y-%m-%d',
         ]
-        
+    
         for fmt in date_formats:
             try:
                 return datetime.strptime(date_string.strip(), fmt)
             except ValueError:
                 continue
-        
+    
         _logger.warning(f"Unable to parse date: {date_string}")
         return False
 
@@ -164,23 +165,33 @@ class SaleImportWizard(models.TransientModel):
             order.write(order_vals)
         else:
             order = SaleOrder.create(order_vals)
-
+    
         # Process order lines
         product = self._get_or_create_product(row)
+        
+        # Ambil harga awal dan harga setelah diskon dari row
+        original_price = self._parse_float(row.get('Harga Awal'))
+        discounted_price = self._parse_float(row.get('Harga Setelah Diskon'))
+
+        # Hitung diskon sebagai persentase
+        if original_price > 0:  # Pastikan harga awal tidak nol
+            discount_percentage = ((original_price - discounted_price) / original_price) * 100
+        else:
+            discount_percentage = 0.0
+
         line_vals = {
             'order_id': order.id,
             'product_id': product.id,
             'parent_sku': row.get('SKU Induk'),
             'sku_reference': row.get('Nomor Referensi SKU'),
             'variation_name': row.get('Nama Variasi'),
-            'original_price': self._parse_float(row.get('Harga Awal')),
-            'discounted_price': self._parse_float(row.get('Harga Setelah Diskon')),
+            'original_price': original_price,
+            'discounted_price': discounted_price,
             'returned_quantity': self._parse_float(row.get('Returned quantity', '0')),
             'product_uom_qty': self._parse_float(row.get('Jumlah')),
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
-            'voucher_seller': self._parse_float(row.get('Voucher Ditanggung Penjual')),
-            'seller_discount': self._parse_float(row.get('Diskon Dari Penjual')),
+            'discount': discount_percentage,  # Tambahkan diskon ke dalam line_vals
         }
         order.order_line = [(0, 0, line_vals)]
 
@@ -206,24 +217,16 @@ class SaleImportWizard(models.TransientModel):
                 errors.append(f"Row {index}: Validation error - {str(e)}")
             except Exception as e:
                 errors.append(f"Row {index}: Unexpected error - {str(e)}")
-                _logger.error(f"Error processing row {index}", exc_info=True)
-
+                _logger.exception("Error importing row %s: %s", index, str(e))
+        
         if errors:
-            error_message = "\n".join(errors)
-            if len(created_orders) > 0:
-                self.env.cr.rollback()
-                message = _(
-                    "The import process encountered errors and was rolled back. "
-                    "No orders were created. Please fix the following errors and try again:\n%s"
-                ) % error_message
-            else:
-                message = _("The following errors occurred during import:\n%s") % error_message
-            raise UserError(message)
+            raise UserError("\n".join(errors))
 
         return {
-            'name': _('Imported Sale Orders'),
-            'view_mode': 'tree,form',
-            'res_model': 'sale.order',
             'type': 'ir.actions.act_window',
+            'name': _('Imported Sales Orders'),
+            'res_model': 'sale.order',
+            'view_mode': 'tree,form',
             'domain': [('id', 'in', created_orders.ids)],
+            'context': {'create': False},
         }
