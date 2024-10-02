@@ -1,5 +1,5 @@
 {
-    'name': 'Sale CSV Import Export',
+    'name': 'Import Shopee To Sale Order',
     'version': '14.0',
     'category': 'Sales',
     'summary': 'Import and export CSV for sale module with extended fields',
