@@ -13,7 +13,7 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     # Fields tambahan pada sale.order
-    nomor_pesanan = fields.Char(string='No. Pesanan', store=True, copy=False, index=True)
+    nomor_pesanan = fields.Char(string='No. Pesanan', copy=False, index=True)
     order_status = fields.Selection([
         ('Belum Bayar', 'Belum Bayar'),
         ('Perlu Dikirim', 'Perlu Dikirim'),
@@ -64,7 +64,7 @@ class SaleOrder(models.Model):
             res = super(SaleOrder, self)._amount_all()
 
         return res
-    
+
     
     @api.constrains('order_status', 'order_completion_time')
     def _check_order_status(self):
@@ -93,7 +93,6 @@ class SaleOrderLine(models.Model):
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
     biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
     biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
-    total = fields.Monetary(string='Sub Total', compute='_compute_amount', store=True)
 
     @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
     def _compute_amount(self):
