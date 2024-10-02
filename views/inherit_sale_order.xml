@@ -22,7 +22,6 @@
                 </tree>
             </field>
         </record>
-
         <record id="action_orders_custom" model="ir.actions.act_window">
             <field name="name">Sales Orders - Shopee</field>
             <field name="type">ir.actions.act_window</field>
@@ -37,8 +36,7 @@
                 </p>
             </field>
         </record>
-
-  
+ 
         <record id="view_order_form_inherit_shopee" model="ir.ui.view">
             <field name="name">sale.order.form.inherit.shopee</field>
             <field name="model">sale.order</field>
@@ -56,9 +54,20 @@
                     <field name="payment_method"/>
                     <field name="payment_time"/>
                 </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page string="Shopee Info" name="shopee_info">
+                        <!-- Add fields or content for the new tab here -->
+                        <group>
+                            <field name="tracking_number"/>
+                            <field name="opsi_pengiriman"/>
+                            <field name="shipping_option"/>
+                            <field name="cancellation_return_status"/>
+                        </group>
+                    </page>
+                </xpath>
             </field>
         </record>
-
+       
         <menuitem id="menu_sale_order_custom"
             name="Shopee Orders "
             action="action_orders_custom"
