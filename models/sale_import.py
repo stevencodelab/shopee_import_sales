@@ -92,7 +92,6 @@ class SaleOrderLine(models.Model):
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
     biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
     biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
-    total = fields.Monetary(string='Sub Total', compute='_compute_amount', store=True)
 
 
     @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
