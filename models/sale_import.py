@@ -56,13 +56,12 @@ class SaleOrder(models.Model):
     city = fields.Char(string='Kota/Kabupaten')
     province = fields.Char(string='Provinsi')
     order_completion_time = fields.Datetime(string='Waktu Pesanan Selesai')
-
-
+    amount_total = fields.Float(string='Estimasi Total Penghasilan', readonly=True, compute='_amount_all')
+    
     @api.depends('order_line.price_total')
     def _amount_all(self):
         for order in self:
             res = super(SaleOrder, self)._amount_all()
-
         return res
 
     
@@ -93,6 +92,7 @@ class SaleOrderLine(models.Model):
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
     biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
     biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
+
 
     @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
     def _compute_amount(self):
@@ -209,7 +209,7 @@ class SaleImportExport(models.Model):
                 'state_id': self._get_state_id(row.get('Provinsi')),
             })
         return partner
-
+    
     def _get_state_id(self, state_name):
         """
         Mendapatkan ID provinsi berdasarkan nama
