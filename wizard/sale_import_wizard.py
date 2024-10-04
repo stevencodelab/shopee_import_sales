@@ -10,7 +10,6 @@ _logger = logging.getLogger(__name__)
 
 try:
     import pytz
-
 except ImportError:
     pytz = None
     _logger.warning("pytz library is not installed. Timezone conversion may not be accurate.")
@@ -115,28 +114,48 @@ class SaleImportWizard(models.TransientModel):
                 'weight': self._parse_float(row.get('Berat Produk')),
             })
         return product
+
+    def _get_or_create_carrier(self, carrier_name):
+        """
+        Get or create delivery carrier based on name
+        """
+        Carrier = self.env['delivery.carrier']
+        
+        if not carrier_name:
+            return False
+        
+        carrier = Carrier.search([('name', '=', carrier_name)], limit=1)
+        if not carrier:
+            carrier_vals = {
+                'name': carrier_name,
+                'delivery_type': 'fixed',  # Anda bisa menyesuaikan tipe delivery sesuai kebutuhan
+                'product_id': self.env.ref('delivery.product_product_delivery').id,
+            }
+            carrier = Carrier.create(carrier_vals)
+        return carrier
     
     def _create_sale_order(self, row):
         """
         Create or update sale order based on CSV row data
         """
         SaleOrder = self.env['sale.order']
-        nomor_pesanan = row.get('No. Pesanan')
         
-        # Cek apakah nomor pesanan sudah ada
-        existing_order = SaleOrder.search([('nomor_pesanan', '=', nomor_pesanan)], limit=1)
+        # Check if a sale order with the same order number already exists
+        existing_order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
         if existing_order:
-            raise ValidationError(_("Sale order with order number '%s' already exists." % nomor_pesanan))
+            raise ValidationError(f"Sale order with order number '{row.get('No. Pesanan')}' already exists.")
         
         partner = self._get_or_create_partner(row)
+        carrier = self._get_or_create_carrier(row.get('Opsi Pengiriman'))
         
         order_vals = {
             'partner_id': partner.id,
-            'nomor_pesanan': nomor_pesanan,
+            'nomor_pesanan': row.get('No. Pesanan'),
             'order_status': row.get('Status Pesanan'),
             'cancellation_return_status': row.get('Status Pembatalan/ Pengembalian'),
             'tracking_number': row.get('No. Resi'),
             'opsi_pengiriman': row.get('Opsi Pengiriman'),
+            'carrier_id': carrier.id if carrier else False,
             'shipping_option': 'antar counter' if row.get('Antar ke counter/ pick-up') == 'Antar Ke Counter' else 'pickup',
             'must_ship_before': self._parse_datetime(row.get('Pesanan Harus Dikirimkan Sebelum (Menghindari keterlambatan)')),
             'order_creation_time': self._parse_datetime(row.get('Waktu Pesanan Dibuat')),
@@ -164,17 +183,14 @@ class SaleImportWizard(models.TransientModel):
             'order_completion_time': self._parse_datetime(row.get('Waktu Pesanan Selesai')),
         }
 
-        # Membuat sale order baru
         order = SaleOrder.create(order_vals)
 
-        # Proses order lines
+        # Process order lines
         product = self._get_or_create_product(row)
         
-        # Ambil value dari kolom harga awal dan harga setelah diskon dari csv
         original_price = self._parse_float(row.get('Harga Awal'))
         discounted_price = self._parse_float(row.get('Harga Setelah Diskon'))
 
-        # Hitung diskon sebagai persentase
         if original_price > 0:
             discount_percentage = ((original_price - discounted_price) / original_price) * 100
         else:
@@ -192,15 +208,15 @@ class SaleImportWizard(models.TransientModel):
             'product_uom_qty': self._parse_float(row.get('Jumlah')),
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
-            'discount': discount_percentage,
+            'discount': discount_percentage, 
         }
         order.order_line = [(0, 0, line_vals)]
 
         return order
-
         
     def import_sales(self):
         """Import sales from the uploaded CSV file."""
+
         self.ensure_one()
         if not self.file_data:
             raise UserError(_("Please upload a file to import."))
