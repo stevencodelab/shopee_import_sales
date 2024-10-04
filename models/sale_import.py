@@ -64,6 +64,10 @@ class SaleOrder(models.Model):
             res = super(SaleOrder, self)._amount_all()
         return res
 
+    @api.onchange('nomor_pesanan')
+    def _onchange_nomor_pesanan(self):
+        if self.nomor_pesanan:
+            self.client_order_ref = self.nomor_pesanan
     
     @api.constrains('order_status', 'order_completion_time')
     def _check_order_status(self):
@@ -85,19 +89,24 @@ class SaleOrderLine(models.Model):
     parent_sku = fields.Char(string='Parent SKU')
     sku_reference = fields.Char(string='SKU Reference')
     variation_name = fields.Char(string='Variation Name')
-    original_price = fields.Float(string='Original Price', digits=(16, 6))
-    discounted_price = fields.Float(string='Discounted Price', digits=(16, 6))
+    original_price = fields.Float(string='Harga Awal')
+    discounted_price = fields.Float(string='Harga Setelah Diskon')
     returned_quantity = fields.Float(string='Returned Quantity', digits=(16, 6))
     product_weight = fields.Float(string='Product Weight', digits=(16, 6))
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
     biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
     biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
-
+    total = fields.Monetary(string='Sub Total', compute='_compute_amount', store=True)
 
     @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
     def _compute_amount(self):
         for line in self:
             res = super(SaleOrderLine, self)._compute_amount()
+
+    @api.onchange('original_price')
+    def _onchange_original_price(self):
+        if self.original_price:
+            self.price_unit = self.original_price        
 
 class SaleImportExport(models.Model):
     _name = 'sale.import.export'
