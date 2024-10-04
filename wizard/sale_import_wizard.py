@@ -50,7 +50,7 @@ class SaleImportWizard(models.TransientModel):
             '%Y-%m-%d %H:%M',
             '%Y-%m-%d',
         ]
-    
+
         for fmt in date_formats:
             try:
                 return datetime.strptime(date_string.strip(), fmt)
@@ -61,16 +61,14 @@ class SaleImportWizard(models.TransientModel):
         return False
 
     def _parse_float(self, value):
-        """
-        Parse value to float, handling empty cases and preserving precision
-        """
         if not value:
             return 0.0
         try:
-            # Remove thousand separators and replace comma with dot for decimal
-            cleaned_value = value.replace(',', '').replace('.', '').replace(',', '.')
+            # Menghapus pemisah ribuan dan mengganti pemisah desimal
+            cleaned_value = value.replace('.', '').replace(',', '.')
             return float(cleaned_value)
         except ValueError:
+            _logger.warning(f"Invalid float value: {value}")
             return 0.0
 
     def _get_or_create_partner(self, row):
@@ -117,19 +115,24 @@ class SaleImportWizard(models.TransientModel):
                 'weight': self._parse_float(row.get('Berat Produk')),
             })
         return product
-
+    
     def _create_sale_order(self, row):
         """
         Create or update sale order based on CSV row data
         """
         SaleOrder = self.env['sale.order']
-        order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
+        nomor_pesanan = row.get('No. Pesanan')
+        
+        # Cek apakah nomor pesanan sudah ada
+        existing_order = SaleOrder.search([('nomor_pesanan', '=', nomor_pesanan)], limit=1)
+        if existing_order:
+            raise ValidationError(_("Sale order with order number '%s' already exists." % nomor_pesanan))
         
         partner = self._get_or_create_partner(row)
         
         order_vals = {
             'partner_id': partner.id,
-            'nomor_pesanan': row.get('No. Pesanan'),
+            'nomor_pesanan': nomor_pesanan,
             'order_status': row.get('Status Pesanan'),
             'cancellation_return_status': row.get('Status Pembatalan/ Pengembalian'),
             'tracking_number': row.get('No. Resi'),
@@ -161,20 +164,18 @@ class SaleImportWizard(models.TransientModel):
             'order_completion_time': self._parse_datetime(row.get('Waktu Pesanan Selesai')),
         }
 
-        if order:
-            order.write(order_vals)
-        else:
-            order = SaleOrder.create(order_vals)
-    
-        # Process order lines
+        # Membuat sale order baru
+        order = SaleOrder.create(order_vals)
+
+        # Proses order lines
         product = self._get_or_create_product(row)
         
-        # Ambil harga awal dan harga setelah diskon dari row
+        # Ambil value dari kolom harga awal dan harga setelah diskon dari csv
         original_price = self._parse_float(row.get('Harga Awal'))
         discounted_price = self._parse_float(row.get('Harga Setelah Diskon'))
 
         # Hitung diskon sebagai persentase
-        if original_price > 0:  # Pastikan harga awal tidak nol
+        if original_price > 0:
             discount_percentage = ((original_price - discounted_price) / original_price) * 100
         else:
             discount_percentage = 0.0
@@ -191,16 +192,15 @@ class SaleImportWizard(models.TransientModel):
             'product_uom_qty': self._parse_float(row.get('Jumlah')),
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
-            'discount': discount_percentage,  # Tambahkan diskon ke dalam line_vals
+            'discount': discount_percentage,
         }
         order.order_line = [(0, 0, line_vals)]
 
         return order
+
         
     def import_sales(self):
-        """
-        Import sales from the uploaded CSV file.
-        """
+        """Import sales from the uploaded CSV file."""
         self.ensure_one()
         if not self.file_data:
             raise UserError(_("Please upload a file to import."))
@@ -208,7 +208,7 @@ class SaleImportWizard(models.TransientModel):
         rows = self._parse_file()
         created_orders = self.env['sale.order']
         errors = []
-    
+
         for index, row in enumerate(rows, start=1):
             try:
                 order = self._create_sale_order(row)
@@ -221,7 +221,7 @@ class SaleImportWizard(models.TransientModel):
         
         if errors:
             raise UserError("\n".join(errors))
-
+    
         return {
             'type': 'ir.actions.act_window',
             'name': _('Imported Sales Orders'),
