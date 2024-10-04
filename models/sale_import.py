@@ -13,7 +13,7 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     # Fields tambahan pada sale.order
-    nomor_pesanan = fields.Char(string='No. Pesanan', copy=False, index=True)
+    nomor_pesanan = fields.Char(string='No. Pesanan',index=True)
     order_status = fields.Selection([
         ('Belum Bayar', 'Belum Bayar'),
         ('Perlu Dikirim', 'Perlu Dikirim'),
@@ -64,10 +64,16 @@ class SaleOrder(models.Model):
             res = super(SaleOrder, self)._amount_all()
         return res
 
-    @api.onchange('nomor_pesanan')
-    def _onchange_nomor_pesanan(self):
-        if self.nomor_pesanan:
-            self.client_order_ref = self.nomor_pesanan
+    @api.model
+    def create(self, vals):
+        if 'nomor_pesanan' in vals:
+            vals['client_order_ref'] = vals['nomor_pesanan']
+        return super(SaleOrder, self).create(vals)
+
+    def write(self, vals):
+        if 'nomor_pesanan' in vals:
+            vals['client_order_ref'] = vals['nomor_pesanan']
+        return super(SaleOrder, self).write(vals)        
     
     @api.constrains('order_status', 'order_completion_time')
     def _check_order_status(self):
