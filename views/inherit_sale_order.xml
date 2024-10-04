@@ -78,7 +78,19 @@
                     order.action_confirm()
             </field>
         </record>
-    
+
+
+        <record id="view_sales_order_filter_inherit" model="ir.ui.view">
+            <field name="name">sale.order.list.select.inherit</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+            <field name="arch" type="xml">
+                <field name="name" position="after">
+                    <field name="nomor_pesanan" string="Nomor Pesanan" filter_domain="[('nomor_pesanan', 'ilike', self)]"/>
+                    <field name="tracking_number" string="Nomor Resi" filter_domain="[('tracking_number', 'ilike', self)]"/>
+                </field>
+            </field>
+        </record>
         
         <menuitem id="menu_sale_order_custom"
             name="Shopee Orders "
