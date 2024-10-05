@@ -89,6 +89,21 @@ class SaleOrder(models.Model):
                 # if not self.env.context.get('importing_sale_order'):
                 #     raise ValidationError(_("Waktu Pesanan Selesai harus diisi jika status pesanan adalah 'Selesai'."))
 
+
+                # Inherit model stock.picking untuk menangani pembuatan dokumen pengiriman.
+                # Dalam metode create, sistem akan memeriksa apakah picking terkait dengan sales order.
+                # Jika ya, sistem mengisi carrier_tracking_ref (field untuk Tracking Reference) dengan nomor_pesanan dari sales order (sale_id.nomor_pesanan).
+                # Kita juga mewarisi model sale.order untuk menangani konfirmasi pesanan.
+                # Dalam metode action_confirm, setelah konfirmasi pesanan, sistem akan mengupdate semua picking yang belum selesai dengan nomor pesanan.
+
+    def action_confirm(self):
+        res = super(SaleOrder, self).action_confirm()
+        for order in self:
+            pickings = order.picking_ids.filtered(lambda x: x.state not in ('done', 'cancel'))
+            for picking in pickings:
+                picking.carrier_tracking_ref = order.nomor_pesanan
+        return res            
+
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
     
@@ -260,4 +275,17 @@ class SaleImportExport(models.Model):
             return float(cleaned_value)
         except ValueError:
             return 0.0
+
+class StockPicking(models.Model):
+    _inherit = 'stock.picking'
+
+    @api.model
+    def create(self, vals):
+        res = super(StockPicking, self).create(vals)
+        if res.sale_id and res.sale_id.nomor_pesanan:
+            res.carrier_tracking_ref = res.sale_id.nomor_pesanan
+        return res
+
+
+
     
