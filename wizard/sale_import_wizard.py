@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 
 try:
     import pytz
+
 except ImportError:
     pytz = None
     _logger.warning("pytz library is not installed. Timezone conversion may not be accurate.")
@@ -132,18 +133,14 @@ class SaleImportWizard(models.TransientModel):
                 'product_id': self.env.ref('delivery.product_product_delivery').id,
             }
             carrier = Carrier.create(carrier_vals)
-        return carrier
+        return carrier    
     
     def _create_sale_order(self, row):
         """
         Create or update sale order based on CSV row data
         """
         SaleOrder = self.env['sale.order']
-        
-        # Check if a sale order with the same order number already exists
-        existing_order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
-        if existing_order:
-            raise ValidationError(f"Sale order with order number '{row.get('No. Pesanan')}' already exists.")
+        order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
         
         partner = self._get_or_create_partner(row)
         carrier = self._get_or_create_carrier(row.get('Opsi Pengiriman'))
@@ -183,14 +180,19 @@ class SaleImportWizard(models.TransientModel):
             'order_completion_time': self._parse_datetime(row.get('Waktu Pesanan Selesai')),
         }
 
-        order = SaleOrder.create(order_vals)
+        if order:
+            order.write(order_vals)
+        else:
+            order = SaleOrder.create(order_vals)
 
         # Process order lines
         product = self._get_or_create_product(row)
         
+        # Ambil value dari kolom harga awal dan harga setelah diskon dari csv
         original_price = self._parse_float(row.get('Harga Awal'))
         discounted_price = self._parse_float(row.get('Harga Setelah Diskon'))
 
+        # Hitung diskon sebagai persentase
         if original_price > 0:
             discount_percentage = ((original_price - discounted_price) / original_price) * 100
         else:
