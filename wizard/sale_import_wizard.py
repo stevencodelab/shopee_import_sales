@@ -10,7 +10,6 @@ _logger = logging.getLogger(__name__)
 
 try:
     import pytz
-
 except ImportError:
     pytz = None
     _logger.warning("pytz library is not installed. Timezone conversion may not be accurate.")
@@ -141,7 +140,7 @@ class SaleImportWizard(models.TransientModel):
         """
         SaleOrder = self.env['sale.order']
         order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
-        
+
         partner = self._get_or_create_partner(row)
         carrier = self._get_or_create_carrier(row.get('Opsi Pengiriman'))
         
@@ -188,11 +187,12 @@ class SaleImportWizard(models.TransientModel):
         # Process order lines
         product = self._get_or_create_product(row)
         
-        # Ambil value dari kolom harga awal dan harga setelah diskon dari csv
+        # Parse values from CSV
         original_price = self._parse_float(row.get('Harga Awal'))
         discounted_price = self._parse_float(row.get('Harga Setelah Diskon'))
+        quantity = self._parse_float(row.get('Jumlah'))
 
-        # Hitung diskon sebagai persentase
+        # Calculate discount percentage
         if original_price > 0:
             discount_percentage = ((original_price - discounted_price) / original_price) * 100
         else:
@@ -207,10 +207,11 @@ class SaleImportWizard(models.TransientModel):
             'original_price': original_price,
             'discounted_price': discounted_price,
             'returned_quantity': self._parse_float(row.get('Returned quantity', '0')),
-            'product_uom_qty': self._parse_float(row.get('Jumlah')),
+            'product_uom_qty': quantity,
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
-            'discount': discount_percentage, 
+            'discount': discount_percentage,
+            'price_unit': original_price,  # Set price_unit directly to original_price
         }
         order.order_line = [(0, 0, line_vals)]
 
