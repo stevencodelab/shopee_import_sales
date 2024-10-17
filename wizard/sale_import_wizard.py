@@ -20,6 +20,7 @@ class SaleImportWizard(models.TransientModel):
 
     file_data = fields.Binary(string='File CSV', required=True)
     filename = fields.Char(string='Filename')
+    marketplace_id = fields.Many2one('market.place', string='Marketplace', required=True)
 
     def _parse_file(self):
         data = base64.b64decode(self.file_data)
@@ -132,19 +133,15 @@ class SaleImportWizard(models.TransientModel):
                 'product_id': self.env.ref('delivery.product_product_delivery').id,
             }
             carrier = Carrier.create(carrier_vals)
-        return carrier
+        return carrier    
     
     def _create_sale_order(self, row):
         """
         Create or update sale order based on CSV row data
         """
         SaleOrder = self.env['sale.order']
-        
-        # Check if a sale order with the same order number already exists
-        existing_order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
-        if existing_order:
-            raise ValidationError(f"Sale order with order number '{row.get('No. Pesanan')}' already exists.")
-        
+        order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
+
         partner = self._get_or_create_partner(row)
         carrier = self._get_or_create_carrier(row.get('Opsi Pengiriman'))
         
@@ -181,16 +178,23 @@ class SaleImportWizard(models.TransientModel):
             'city': row.get('Kota/Kabupaten'),
             'province': row.get('Provinsi'),
             'order_completion_time': self._parse_datetime(row.get('Waktu Pesanan Selesai')),
+            'sale_marketplace': self.marketplace_id.id, 
         }
 
-        order = SaleOrder.create(order_vals)
+        if order:
+            order.write(order_vals)
+        else:
+            order = SaleOrder.create(order_vals)
 
         # Process order lines
         product = self._get_or_create_product(row)
         
+        # Parse values from CSV
         original_price = self._parse_float(row.get('Harga Awal'))
         discounted_price = self._parse_float(row.get('Harga Setelah Diskon'))
+        quantity = self._parse_float(row.get('Jumlah'))
 
+        # Calculate discount percentage
         if original_price > 0:
             discount_percentage = ((original_price - discounted_price) / original_price) * 100
         else:
@@ -205,10 +209,11 @@ class SaleImportWizard(models.TransientModel):
             'original_price': original_price,
             'discounted_price': discounted_price,
             'returned_quantity': self._parse_float(row.get('Returned quantity', '0')),
-            'product_uom_qty': self._parse_float(row.get('Jumlah')),
+            'product_uom_qty': quantity,
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
-            'discount': discount_percentage, 
+            'discount': discount_percentage,
+            'price_unit': original_price,  # Set price_unit directly to original_price
         }
         order.order_line = [(0, 0, line_vals)]
 
@@ -242,7 +247,7 @@ class SaleImportWizard(models.TransientModel):
             'type': 'ir.actions.act_window',
             'name': _('Imported Sales Orders'),
             'res_model': 'sale.order',
-            'view_mode': 'tree,form',
+            'view_mode': 'list,form',
             'domain': [('id', 'in', created_orders.ids)],
             'context': {'create': False},
         }
