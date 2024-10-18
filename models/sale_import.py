@@ -50,13 +50,12 @@ class SaleOrder(models.Model):
     estimated_shipping_fee = fields.Float(string='Perkiraan Ongkos Kirim')
     buyer_note = fields.Text(string='Catatan dari Pembeli')
     buyer_username = fields.Char(string='Username (Pembeli)')
-    receiver_name = fields.Char(string='Nama Penerima')
+    receiver_name = fields.Char(string='Nama Penerima') 
     receiver_phone = fields.Char(string='No. Telepon')
     shipping_address = fields.Text(string='Alamat Pengiriman')
     city = fields.Char(string='Kota/Kabupaten')
     province = fields.Char(string='Provinsi')
     order_completion_time = fields.Datetime(string='Waktu Pesanan Selesai')
-    amount_total = fields.Float(string='Estimasi Total Penghasilan', readonly=True, compute='_compute_amounts')
     sale_marketplace = fields.Many2one('market.place', string='Marketplace')
     
 
@@ -120,7 +119,6 @@ class SaleOrderLine(models.Model):
     total_weight = fields.Float(string='Total Weight', digits=(16, 6))
     biaya_administrasi = fields.Float(string='Biaya Administrasi', digits=(16,6))
     biaya_layanan = fields.Float(string='Biaya Layanan (Termasuk PPN 11%)', digits=(16,6))
-    total = fields.Monetary(string='Sub Total', compute='_compute_amount', store=True)
     
     @api.depends('price_unit', 'discount', 'product_uom_qty', 'tax_id')
     def _compute_amount(self):
