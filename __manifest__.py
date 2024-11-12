@@ -1,6 +1,6 @@
 {
     'name': 'Import Shopee To Sale Order',
-    'version': '14.0',
+    'version': '18.0',
     'category': 'Sales',
     'summary': 'Import and export CSV for sale module with extended fields',
     'description': """
@@ -8,7 +8,7 @@
         It handles existing data and creates new records only when necessary.
     """,
     'author': 'Laksamana Morison',
-    'website': 'https://stevencodelab.github.io',
+    'website': 'https://stevencodelab.github.io/',
     'depends': ['sale'],
     'data': [
         'security/ir.model.access.csv',
@@ -17,6 +17,9 @@
         'wizard/sale_import_wizard.xml',
         'wizard/sale_export_wizard.xml',
     ],
+    'external_dependencies': {
+        'python': ['xlrd', 'openpyxl'],
+    },
     'installable': True,
     'application': True,
     'auto_install': False,
