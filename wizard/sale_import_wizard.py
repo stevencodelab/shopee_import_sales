@@ -5,6 +5,7 @@ import csv
 import io
 import logging
 from datetime import datetime
+import tempfile
 
 _logger = logging.getLogger(__name__)
 
@@ -14,15 +15,52 @@ except ImportError:
     pytz = None
     _logger.warning("pytz library is not installed. Timezone conversion may not be accurate.")
 
+try:
+    import xlrd
+    import openpyxl
+except ImportError:
+    _logger.warning("xlrd or openpyxl library is not installed. Excel import may not work.")
+
 class SaleImportWizard(models.TransientModel):
     _name = 'sale.import.wizard'
     _description = 'Sale Import Wizard'
 
-    file_data = fields.Binary(string='File CSV', required=True)
+    file_data = fields.Binary(string='File', required=True)
     filename = fields.Char(string='Filename')
+    file_type = fields.Selection([
+        ('csv', 'CSV File'),
+        ('xls', 'XLS File'),
+        ('xlsx', 'XLSX File')
+    ], string='File Type', required=True, default='csv')
     marketplace_id = fields.Many2one('market.place', string='Marketplace', required=True)
 
+    @api.onchange('filename')
+    def _onchange_filename(self):
+        if self.filename:
+            file_extension = self.filename.split('.')[-1].lower()
+            if file_extension in ['csv']:
+                self.file_type = 'csv'
+            elif file_extension in ['xls']:
+                self.file_type = 'xls'
+            elif file_extension in ['xlsx']:
+                self.file_type = 'xlsx'
+
     def _parse_file(self):
+        """Parse the uploaded file based on its type"""
+        if not self.file_data:
+            raise UserError(_("Please upload a file to import."))
+
+        if self.file_type == 'csv':
+            return self._parse_csv()
+        elif self.file_type == 'xls':
+            return self._parse_xls()
+        elif self.file_type == 'xlsx':
+            return self._parse_xlsx()
+        else:
+            raise UserError(_("Unsupported file type."))
+
+    def _parse_csv(self):
+        """Parse CSV file"""
         data = base64.b64decode(self.file_data)
         encodings = ['utf-8', 'iso-8859-1', 'windows-1252']
         for encoding in encodings:
@@ -32,7 +70,77 @@ class SaleImportWizard(models.TransientModel):
                 return list(reader)
             except UnicodeDecodeError:
                 continue
-        raise UserError(_("Unable to decode the file. Please check the file encoding."))
+        raise UserError(_("Unable to decode the CSV file. Please check the file encoding."))
+
+    def _parse_xls(self):
+        """Parse XLS file"""
+        data = base64.b64decode(self.file_data)
+        
+        # Write the binary data to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(data)
+            temp_file.seek(0)
+            
+            try:
+                # Open the workbook
+                book = xlrd.open_workbook(temp_file.name)
+                sheet = book.sheet_by_index(0)
+                
+                # Get headers from the first row
+                headers = [str(cell.value) for cell in sheet.row(0)]
+                
+                # Convert all rows to dictionaries
+                result = []
+                for row_idx in range(1, sheet.nrows):
+                    row = {}
+                    for col_idx, header in enumerate(headers):
+                        cell_value = sheet.cell(row_idx, col_idx).value
+                        # Convert numbers to strings to match CSV behavior
+                        if isinstance(cell_value, float):
+                            # Check if it's actually an integer
+                            if cell_value.is_integer():
+                                cell_value = str(int(cell_value))
+                            else:
+                                cell_value = str(cell_value)
+                        row[header] = str(cell_value) if cell_value else ''
+                    result.append(row)
+                return result
+            except Exception as e:
+                raise UserError(_("Error reading XLS file: %s") % str(e))
+
+    def _parse_xlsx(self):
+        """Parse XLSX file"""
+        data = base64.b64decode(self.file_data)
+        
+        # Write the binary data to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
+            temp_file.write(data)
+            temp_file.seek(0)
+            
+            try:
+                # Load the workbook
+                workbook = openpyxl.load_workbook(temp_file.name, data_only=True)
+                sheet = workbook.active
+                
+                # Get headers from the first row
+                headers = [str(cell.value) for cell in next(sheet.rows)]
+                
+                # Convert all rows to dictionaries
+                result = []
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    row_dict = {}
+                    for header, value in zip(headers, row):
+                        # Convert numbers to strings to match CSV behavior
+                        if isinstance(value, (int, float)):
+                            if isinstance(value, float) and value.is_integer():
+                                value = str(int(value))
+                            else:
+                                value = str(value)
+                        row_dict[header] = str(value) if value is not None else ''
+                    result.append(row_dict)
+                return result
+            except Exception as e:
+                raise UserError(_("Error reading XLSX file: %s") % str(e))
 
     def _parse_datetime(self, date_string):
         """
@@ -92,7 +200,7 @@ class SaleImportWizard(models.TransientModel):
             }
             partner = Partner.create(partner_vals)
         return partner
-
+    
     def _get_state_id(self, state_name):
         """
         Get state ID based on name
@@ -115,7 +223,7 @@ class SaleImportWizard(models.TransientModel):
                 'weight': self._parse_float(row.get('Berat Produk')),
             })
         return product
-
+    
     def _get_or_create_carrier(self, carrier_name):
         """
         Get or create delivery carrier based on name
@@ -142,6 +250,16 @@ class SaleImportWizard(models.TransientModel):
         SaleOrder = self.env['sale.order']
         order = SaleOrder.search([('nomor_pesanan', '=', row.get('No. Pesanan'))], limit=1)
 
+        # Mendapatkan payment mode 'BC Online'
+        payment_mode = self.env['account.payment.mode'].search([('name', '=', 'BC Online')], limit=1)
+        if not payment_mode:
+            raise ValidationError(_("Payment mode 'BC Online' not found in the system."))
+        
+        # # Mendapatkan automatic workflow 'Automatic'
+        workflow = self.env['sale.workflow.process'].search([('name', '=', 'Automatic')], limit=1)
+        if not workflow:
+            raise ValidationError(_("Workflow 'Automatic' not found in the system."))
+
         partner = self._get_or_create_partner(row)
         carrier = self._get_or_create_carrier(row.get('Opsi Pengiriman'))
         
@@ -165,7 +283,7 @@ class SaleImportWizard(models.TransientModel):
             'package_discount_platform': self._parse_float(row.get('Paket Diskon (Diskon dari Shopee)')),
             'package_discount_seller': self._parse_float(row.get('Paket Diskon (Diskon dari Penjual)')),
             'coin_discount': self._parse_float(row.get('Potongan Koin Shopee')),
-            'credit_card_discount': self._parse_float(row.get('Diskon Kartu Kredit')),
+            'credit_card_discount': self._parse_float(row.get('Diskan Kartu Kredit')),
             'shipping_fee_paid_by_buyer': self._parse_float(row.get('Ongkos Kirim Dibayar oleh Pembeli')),
             'shipping_fee_discount': self._parse_float(row.get('Estimasi Potongan Biaya Pengiriman')),
             'return_shipping_fee': self._parse_float(row.get('Ongkos Kirim Pengembalian Barang')),
@@ -178,7 +296,10 @@ class SaleImportWizard(models.TransientModel):
             'city': row.get('Kota/Kabupaten'),
             'province': row.get('Provinsi'),
             'order_completion_time': self._parse_datetime(row.get('Waktu Pesanan Selesai')),
-            'sale_marketplace': self.marketplace_id.id, 
+            'sale_marketplace': self.marketplace_id.id,
+            # Menambahkan payment mode dan workflow
+            'payment_mode_id': payment_mode.id,
+            'workflow_process_id': workflow.id,
         }
 
         if order:
@@ -199,7 +320,7 @@ class SaleImportWizard(models.TransientModel):
             discount_percentage = ((original_price - discounted_price) / original_price) * 100
         else:
             discount_percentage = 0.0
-
+        
         line_vals = {
             'order_id': order.id,
             'product_id': product.id,
@@ -213,19 +334,17 @@ class SaleImportWizard(models.TransientModel):
             'product_weight': self._parse_float(row.get('Berat Produk')),
             'total_weight': self._parse_float(row.get('Total Berat')),
             'discount': discount_percentage,
-            'price_unit': original_price,  # Set price_unit directly to original_price
+            'price_unit': original_price,
         }
         order.order_line = [(0, 0, line_vals)]
-
+        
         return order
         
     def import_sales(self):
         """Import sales from the uploaded CSV file."""
-
         self.ensure_one()
         if not self.file_data:
             raise UserError(_("Please upload a file to import."))
-
         rows = self._parse_file()
         created_orders = self.env['sale.order']
         errors = []
