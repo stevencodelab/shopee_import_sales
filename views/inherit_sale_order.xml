@@ -23,7 +23,7 @@
             </field>
         </record>
         <record id="action_orders_custom" model="ir.actions.act_window">
-            <field name="name">Imported Sales Orders</field>
+            <field name="name">Shopee Orders</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">sale.order</field>
             <field name="view_mode">list,form,calendar,graph,pivot,kanban</field>
@@ -36,7 +36,7 @@
                 </p>
             </field>
         </record>
- 
+        
         <record id="view_order_form_inherit_shopee" model="ir.ui.view">
             <field name="name">sale.order.form.inherit.shopee</field>
             <field name="model">sale.order</field>
@@ -44,9 +44,9 @@
             <field name="arch" type="xml">
                 <!-- Menambahkan field pada bagian partner -->
                 <xpath expr="//field[@name='partner_id']" position="before">
-                    <field name="nomor_pesanan"/>
+                    <field name="nomor_pesanan" readonly="1"/>
                     <field name="order_creation_time"/>
-                    <field name="order_status"/>
+                    <field name="order_status" readonly="1"/>
                 </xpath>
                 <!-- Menambahkan field setelah payment term -->
                 <xpath expr="//field[@name='payment_term_id']" position="after">
@@ -60,7 +60,7 @@
                     <page string="Shopee Info" name="shopee_info">
                         <group>
                             <field name="tracking_number"/>
-                            <field name="opsi_pengiriman"/>
+                            <field name="opsi_pengiriman" readonly="1"/>
                             <field name="shipping_option"/>
                             <field name="cancellation_return_status"/>
                         </group>
@@ -78,7 +78,6 @@
                     order.action_confirm()
             </field>
         </record>
-
 
         <record id="view_sales_order_filter_inherit" model="ir.ui.view">
             <field name="name">sale.order.list.select.inherit</field>

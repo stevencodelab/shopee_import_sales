@@ -249,7 +249,7 @@ class SaleImportExport(models.Model):
         if state:
             return state.id
         return False
-
+    
     def _get_or_create_product(self, row):
         """
         Mendapatkan atau membuat produk berdasarkan SKU
@@ -287,6 +287,35 @@ class StockPicking(models.Model):
             res.carrier_tracking_ref = res.sale_id.nomor_pesanan
         return res
 
+    def button_validate(self):
+        """Override metode button_validate untuk mengubah status pesanan menjadi Sedang Dikirim"""
+        res = super(StockPicking, self).button_validate()
+        for picking in self:
+            if picking.sale_id and picking.picking_type_code == 'outgoing':
+                picking.sale_id.write({
+                    'order_status': 'Sedang Dikirim'
+                })
+        return res
+
+    def action_cancel(self):
+        """Override metode action_cancel untuk mengubah status pesanan menjadi Batal"""
+        res = super(StockPicking, self).action_cancel()
+        for picking in self:
+            if picking.sale_id and picking.picking_type_code == 'outgoing':
+                picking.sale_id.write({
+                    'order_status': 'Batal'
+                })
+        return res
+
+    def _action_done(self):
+        """Override metode _action_done untuk menangani kasus return"""
+        res = super(StockPicking, self)._action_done()
+        for picking in self:
+            if picking.sale_id and picking.picking_type_code == 'incoming' and picking.is_return:
+                picking.sale_id.write({
+                    'order_status': 'Pengembalian'
+                })
+        return res
 
 
     
